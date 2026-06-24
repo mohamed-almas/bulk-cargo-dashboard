@@ -1,6 +1,5 @@
-streamlit
-supabase
-pandas
-plotly
-duckdb
-pytz
+streamlit>=1.38,<2
+supabase>=2.8,<3
+pandas>=2.2,<3
+numpy>=1.26,<3
+plotly>=5.24
