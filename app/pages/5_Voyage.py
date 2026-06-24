@@ -1,9 +1,9 @@
 import streamlit as st
-from common import apply_theme, call_rpc, call_rpc_scalar, render_global_filters, get_filter_params
+from common import apply_theme, render_header, call_rpc, call_rpc_scalar, render_global_filters, get_filter_params
 
 st.set_page_config(page_title="Voyage | Bulk Cargo Dashboard", layout="wide")
 apply_theme()
-st.title("📋 Voyage Detail")
+render_header("📋 Voyage Detail", "Cargo Intelligence — Voyage Search")
 
 render_global_filters()
 params = get_filter_params()

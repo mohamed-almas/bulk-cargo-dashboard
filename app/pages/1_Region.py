@@ -1,11 +1,10 @@
 import plotly.express as px
 import streamlit as st
-from common import apply_theme, call_rpc, render_global_filters, get_filter_params, CARGO_COLORS
+from common import apply_theme, render_header, call_rpc, render_global_filters, get_filter_params, CARGO_COLORS
 
 st.set_page_config(page_title="Region | Bulk Cargo Dashboard", layout="wide")
 apply_theme()
-st.title("🗺️ Region Overview")
-st.caption("Region = continent of the load or discharge port")
+render_header("🗺️ Region Overview", "Region = continent of the load or discharge port")
 
 render_global_filters()
 params = get_filter_params()

@@ -28,14 +28,30 @@ def apply_theme():
         .stApp {{ background-color: {THEME['bg']}; }}
         [data-testid="stSidebar"] {{ background-color: {THEME['header']}; }}
         [data-testid="stSidebar"] * {{ color: #e9f0f9 !important; }}
-        [data-testid="stMetric"] {{
-            background-color: {THEME['card']};
-            border-radius: 10px;
-            padding: 14px 16px;
-            border-top: 3px solid {CHART_COLORS[0]};
-            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-        }}
         h1, h2, h3 {{ color: {THEME['text']}; }}
+
+        .dash-header {{
+            background: linear-gradient(120deg, {THEME['header']}, {THEME['header2']});
+            color: #ffffff;
+            padding: 22px 28px;
+            border-radius: 10px;
+            margin-bottom: 16px;
+        }}
+        .dash-header h1 {{ color: #ffffff; font-size: 21px; font-weight: 700; margin: 0; }}
+        .dash-header .subtitle {{ font-size: 12.5px; color: #bcd2ec; margin-top: 4px; }}
+
+        .kpi-card {{
+            background: {THEME['card']};
+            border-radius: 10px;
+            padding: 16px 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,.08);
+            border-left: 4px solid {CHART_COLORS[0]};
+            height: 100%;
+        }}
+        .kpi-label {{ font-size: 11.5px; color: {THEME['text_secondary']}; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }}
+        .kpi-value {{ font-size: 25px; font-weight: 700; color: {THEME['text']}; }}
+        .kpi-sub {{ font-size: 11px; color: {THEME['text_secondary']}; margin-top: 2px; }}
+
         .insight-card {{
             background: #f6f8fb;
             border-radius: 8px;
@@ -43,9 +59,31 @@ def apply_theme():
             border-top: 3px solid {CHART_COLORS[0]};
             margin-bottom: 8px;
             color: {THEME['text']};
+            height: 100%;
         }}
         .insight-card b {{ color: {THEME['header']}; }}
         </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_header(title: str, subtitle: str):
+    st.markdown(
+        f"""<div class="dash-header"><h1>{title}</h1><div class="subtitle">{subtitle}</div></div>""",
+        unsafe_allow_html=True,
+    )
+
+
+def kpi_card(label: str, value: str, sub: str = "", color_index: int = 0):
+    color = CHART_COLORS[color_index % len(CHART_COLORS)]
+    st.markdown(
+        f"""
+        <div class="kpi-card" style="border-left-color:{color};">
+            <div class="kpi-label">{label}</div>
+            <div class="kpi-value">{value}</div>
+            <div class="kpi-sub">{sub}</div>
+        </div>
         """,
         unsafe_allow_html=True,
     )
@@ -182,13 +220,23 @@ def render_global_filters(default_window_days: int = 60):
     st.session_state["commodity_groups"] = selected_commodity_groups
 
 
-def render_year_filter(default_years_back: int = 5) -> tuple[int, int]:
+def render_snapshot_year_filter() -> int:
+    """Single-year snapshot filter for the matview pages (Home/Country).
+
+    Drives KPIs, pies, and other point-in-time widgets only — trend/line charts always
+    show the full history of complete years/months regardless of this selection.
+    """
     years_df = query_table("xmv_global_yearly", select="year", order="year")
     years = sorted(years_df["year"].unique().tolist())
-    min_year, max_year = years[0], years[-1]
-    default_start = max(min_year, max_year - default_years_back + 1)
+    current_calendar_year = dt.date.today().year
+    last_full_year = current_calendar_year - 1 if years and years[-1] >= current_calendar_year else (years[-1] if years else current_calendar_year)
+    default_year = last_full_year if last_full_year in years else years[-1]
 
-    year_range = st.sidebar.slider("Year range", min_value=min_year, max_value=max_year, value=(default_start, max_year))
+    st.sidebar.header("Filters")
+    snapshot_year = st.sidebar.selectbox(
+        "Year", options=list(reversed(years)), index=years[::-1].index(default_year),
+    )
+    st.sidebar.caption("Year filters KPIs and pie/donut charts only. Trend charts always show full history.")
 
     st.sidebar.divider()
     selected_cargo = st.sidebar.multiselect(
@@ -196,7 +244,7 @@ def render_year_filter(default_years_back: int = 5) -> tuple[int, int]:
     )
     st.session_state["matview_cargo_buckets"] = selected_cargo
 
-    return year_range
+    return snapshot_year
 
 
 def get_filter_params() -> dict:
@@ -218,17 +266,21 @@ def get_matview_cargo_buckets() -> list[str]:
     return st.session_state.get("matview_cargo_buckets") or ["Dry Bulk", "Liquid Bulk"]
 
 
-def matview_query(table_name: str, year_from: int, year_to: int, cargo_buckets: list[str] | None = None, **kwargs) -> pd.DataFrame:
-    """query_table wrapper that pushes the year-range + cargo_bucket filters server-side.
+def matview_query(table_name: str, year_from: int | None, year_to: int | None, cargo_buckets: list[str] | None = None, **kwargs) -> pd.DataFrame:
+    """query_table wrapper that pushes a year-range + cargo_bucket filter server-side.
 
-    Several xmv_* matviews (e.g. xmv_global_ports) have tens of thousands of rows; fetching
-    the whole table before filtering client-side means hundreds of paginated requests.
+    Pass year_from=year_to=None to fetch full history (used for trend charts, which ignore
+    the snapshot-year filter). Several xmv_* matviews (e.g. xmv_global_ports) have tens of
+    thousands of rows; fetching the whole table before filtering client-side means hundreds
+    of paginated requests.
     """
     in_filters = dict(kwargs.pop("in_filters", None) or {})
     if cargo_buckets:
         in_filters["cargo_bucket"] = cargo_buckets
     gte_filters = dict(kwargs.pop("gte_filters", None) or {})
-    gte_filters["year"] = year_from
     lte_filters = dict(kwargs.pop("lte_filters", None) or {})
-    lte_filters["year"] = year_to
+    if year_from is not None:
+        gte_filters["year"] = year_from
+    if year_to is not None:
+        lte_filters["year"] = year_to
     return query_table(table_name, in_filters=in_filters, gte_filters=gte_filters, lte_filters=lte_filters, **kwargs)

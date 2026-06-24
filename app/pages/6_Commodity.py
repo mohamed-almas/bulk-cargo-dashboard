@@ -1,17 +1,17 @@
 import plotly.express as px
 import streamlit as st
 
-from common import apply_theme, call_rpc, query_table, render_global_filters, get_filter_params
+from common import apply_theme, render_header, call_rpc, query_table, render_global_filters, get_filter_params
 from charts import donut_chart, hbar_chart
 
 st.set_page_config(page_title="Commodity | Bulk Cargo Dashboard", layout="wide")
 apply_theme()
-st.title("📦 Commodity Analysis")
+render_header("📦 Commodity Analysis", "Cargo Intelligence — Commodity Drilldown")
 
 render_global_filters()
 params = get_filter_params()
 
-commodity_groups = sorted(query_table("ml_bulk_commodities", select="commodity_group")["commodity_group"].dropna().unique())
+commodity_groups = sorted(query_table("ml_bulk_commodities", select="commodity_group_short")["commodity_group_short"].dropna().unique())
 commodity = st.selectbox("Commodity Group", commodity_groups)
 
 side = st.radio("Side", ["Load", "Discharge"], horizontal=True)
