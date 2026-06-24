@@ -14,7 +14,7 @@ snapshot_year = render_snapshot_year_filter()
 cargo_buckets = get_matview_cargo_buckets()
 current_calendar_year = dt.date.today().year
 
-countries = sorted(query_table("xmv_country_list", select="country_short_name")["country_short_name"].dropna().unique())
+countries = sorted(query_table("xmv_country_list_v2", select="country_short_name")["country_short_name"].dropna().unique())
 country = st.selectbox("Country", countries)
 
 
@@ -74,7 +74,7 @@ st.divider()
 col3, col4 = st.columns(2)
 
 with col3:
-    ports = snapshot("xmv_country_top_ports")
+    ports = snapshot("xmv_country_top_ports_v2")
     load_ports = ports[ports["direction"] == "load"].groupby("port_name", as_index=False)["total_volume"].sum()
     st.plotly_chart(donut_chart(load_ports, "port_name", "total_volume", f"Top Load Ports — {country} ({snapshot_year})"), width="stretch")
 
@@ -84,7 +84,7 @@ with col4:
 
 col5, col6 = st.columns(2)
 with col5:
-    partners = snapshot("xmv_country_top_partners")
+    partners = snapshot("xmv_country_top_partners_v2")
     load_partners = partners[partners["direction"] == "load"].groupby("partner_country_short_name", as_index=False)["total_volume"].sum()
     st.plotly_chart(donut_chart(load_partners, "partner_country_short_name", "total_volume", f"Top Discharge Partners (from {country}) — {snapshot_year}"), width="stretch")
 
@@ -94,7 +94,7 @@ with col6:
 
 st.divider()
 st.subheader(f"Commodity Breakdown — {snapshot_year}")
-commodities = snapshot("xmv_country_top_commodities")
+commodities = snapshot("xmv_country_top_commodities_v2")
 
 col7, col8 = st.columns(2)
 with col7:
