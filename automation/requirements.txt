@@ -1,3 +1,4 @@
+setuptools<81  # oceanbolt-sdk still imports the now-removed pkg_resources API
 oceanbolt-sdk>=0.7,<1
 pandas>=2.2,<3
 requests>=2.32,<3
