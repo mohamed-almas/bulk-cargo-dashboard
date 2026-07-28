@@ -6,3 +6,5 @@ streamlit.log
 __pycache__/
 *.pyc
 incremental_refresh.py
+incremental_refresh_v2.py
+Scripts/
