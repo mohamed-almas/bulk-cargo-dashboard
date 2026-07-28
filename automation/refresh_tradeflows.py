@@ -159,12 +159,12 @@ class SupabaseREST:
             return 0
         return 0
 
-    def rpc(self, fn: str, params: Optional[dict] = None):
+    def rpc(self, fn: str, params: Optional[dict] = None, timeout: int = 60):
         r = requests.post(
             f"{self.base}/rest/v1/rpc/{fn}",
             headers=self.headers,
             json=params or {},
-            timeout=300,
+            timeout=timeout,
         )
         if not r.ok:
             raise RuntimeError(f"RPC {fn} failed {r.status_code}: {r.text[:500]}")
@@ -252,11 +252,26 @@ def main():
 
     log.info("Refreshing tradeflows materialized views ...")
     try:
-        sb.rpc("refresh_tradeflows_matviews")
-        log.info("Materialized views refreshed")
+        view_names = [row["matviewname"] for row in sb.rpc("list_tradeflows_matviews", timeout=30).json()]
     except Exception:
-        log.exception("Matview refresh failed")
+        log.exception("Could not list materialized views")
         had_error = True
+        view_names = []
+
+    # Refreshed one at a time (rather than in one big call) so a single
+    # slow/broken view can't roll back every view already refreshed, and so
+    # each call comfortably fits under the API role's statement_timeout
+    # (the DB function sets its own 5 min override per call).
+    mv_refreshed = 0
+    for view_name in view_names:
+        try:
+            sb.rpc("refresh_one_tradeflows_matview", {"view_name": view_name}, timeout=330)
+            mv_refreshed += 1
+        except Exception:
+            log.exception("Matview refresh failed for %s", view_name)
+            had_error = True
+
+    log.info("Materialized views: %d/%d refreshed", mv_refreshed, len(view_names))
 
     if had_error:
         log.error("Finished with errors")
