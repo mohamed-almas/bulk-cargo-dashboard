@@ -6,9 +6,17 @@ on:
   workflow_dispatch:        # manual trigger from GitHub UI
     inputs:
       days_back:
-        description: "Days to look back (default 60)"
+        description: "Days to look back (ignored if start_date/end_date are set)"
         required: false
         default: "60"
+      start_date:
+        description: "Backfill start date, YYYY-MM-DD (must be set together with end_date)"
+        required: false
+        default: ""
+      end_date:
+        description: "Backfill end date, YYYY-MM-DD (must be set together with start_date)"
+        required: false
+        default: ""
 
 jobs:
   refresh:
@@ -34,4 +42,6 @@ jobs:
           SUPABASE_URL: https://lsyombbeyjokpndczvdj.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           REFRESH_DAYS_BACK: ${{ github.event.inputs.days_back || '60' }}
+          REFRESH_START_DATE: ${{ github.event.inputs.start_date }}
+          REFRESH_END_DATE: ${{ github.event.inputs.end_date }}
         run: python automation/refresh_tradeflows.py

@@ -1,10 +1,16 @@
 """Weekly Oceanbolt -> Supabase incremental refresh for the tradeflows table.
 
-Fetches the last N days (default 60) of trade flow data for all four vessel
-types, upserts the 23 shared columns keyed on flow_id, stamps vessel_type
-and refresh_date, then refreshes every materialized view built on
-tradeflows. Credentials are read only from the environment - see
-scripts/requirements.txt and the refresh_tradeflows.yml workflow.
+Fetches trade flow data for all four vessel types, upserts the 23 shared
+columns keyed on flow_id, stamps vessel_type and refresh_date, then
+refreshes every materialized view built on tradeflows. Credentials are
+read only from the environment - see automation/requirements.txt and the
+refresh_tradeflows.yml workflow.
+
+The date window defaults to the trailing REFRESH_DAYS_BACK days (60 for
+the weekly cron). To backfill/re-sync a specific historical range instead
+(e.g. Oceanbolt revising old voyages), set REFRESH_START_DATE and
+REFRESH_END_DATE (YYYY-MM-DD) - both must be set together and take
+precedence over REFRESH_DAYS_BACK.
 """
 import logging
 import math
@@ -12,7 +18,7 @@ import os
 import sys
 import time
 from datetime import date, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 import requests
@@ -171,16 +177,36 @@ class SupabaseREST:
         return r
 
 
-def fetch_vessel_type(platform: str, days_back: int) -> List[dict]:
-    """Fetch all trade flows for one vessel type over the trailing window.
+def resolve_date_range() -> Tuple[date, date]:
+    """Explicit REFRESH_START_DATE/REFRESH_END_DATE (YYYY-MM-DD) win when both
+    are set - used for backfilling/re-syncing a specific historical window
+    (Oceanbolt sometimes revises old voyages after the fact). Otherwise falls
+    back to the trailing REFRESH_DAYS_BACK window used by the weekly cron.
+    """
+    start_raw = os.environ.get("REFRESH_START_DATE", "").strip()
+    end_raw = os.environ.get("REFRESH_END_DATE", "").strip()
+    if start_raw or end_raw:
+        if not (start_raw and end_raw):
+            raise ValueError("REFRESH_START_DATE and REFRESH_END_DATE must both be set, or neither")
+        start_date = date.fromisoformat(start_raw)
+        end_date = date.fromisoformat(end_raw)
+        if start_date > end_date:
+            raise ValueError(f"REFRESH_START_DATE ({start_date}) is after REFRESH_END_DATE ({end_date})")
+        return start_date, end_date
+
+    days_back = int(os.environ.get("REFRESH_DAYS_BACK", "60"))
+    end_date = date.today()
+    return end_date - timedelta(days=days_back), end_date
+
+
+def fetch_vessel_type(platform: str, start_date: date, end_date: date) -> List[dict]:
+    """Fetch all trade flows for one vessel type over [start_date, end_date].
 
     The high-level TradeFlows.get() wrapper doesn't paginate, and Dry bulk
-    volume is high enough to hit a single page's max_results over a 60-day
-    window, so this walks next_token directly against the underlying
+    volume is high enough to hit a single page's max_results over even a
+    60-day window, so this walks next_token directly against the underlying
     gRPC client (the same one TradeFlows.get() uses internally).
     """
-    end_date = date.today()
-    start_date = end_date - timedelta(days=days_back)
     log.info("Fetching %s from %s to %s", platform, start_date, end_date)
 
     client = APIClient(OCEANBOLT_TOKEN, platform)
@@ -212,7 +238,12 @@ def fetch_vessel_type(platform: str, days_back: int) -> List[dict]:
 
 
 def main():
-    days_back = int(os.environ.get("REFRESH_DAYS_BACK", "60"))
+    try:
+        start_date, end_date = resolve_date_range()
+    except ValueError as e:
+        log.error("Bad date range: %s", e)
+        sys.exit(1)
+
     sb = SupabaseREST(SUPABASE_URL, SUPABASE_KEY)
     refresh_date = pd.Timestamp.now(tz="UTC").isoformat()
 
@@ -221,7 +252,7 @@ def main():
 
     for platform, vessel_type in VESSEL_TYPES:
         try:
-            raw_records = fetch_vessel_type(platform, days_back)
+            raw_records = fetch_vessel_type(platform, start_date, end_date)
         except Exception:
             log.exception("Fetch failed for %s", vessel_type)
             had_error = True
