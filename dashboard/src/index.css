@@ -1,0 +1,63 @@
+@import "tailwindcss";
+
+/* Theme tokens. data-theme is stamped on <html> by ThemeProvider; components
+   reference these as var(--token) so light/dark needs no per-component logic. */
+:root,
+:root[data-theme="dark"] {
+  --bg:        #0A1628;
+  --sidebar:   #070E1E;
+  --panel:     #0F2040;
+  --panel-alt: #0B1830;
+  --border:    #1E3A5F;
+  --border-2:  #2F5480;
+  --hover:     #132852;
+  --text:      #FFFFFF;
+  --text-2:    #CBD5E1;
+  --muted:     #94A3B8;
+  --dim:       #5A7196;
+  --faint:     #3E5878;
+  --accent:    #00C2CB;
+  --accent-ink:#062032;
+  --scroll:    #1E3A5F;
+}
+
+:root[data-theme="light"] {
+  --bg:        #F1F5F9;
+  --sidebar:   #FFFFFF;
+  --panel:     #FFFFFF;
+  --panel-alt: #F8FAFC;
+  --border:    #D8E0E8;
+  --border-2:  #9FB3C6;
+  --hover:     #EDF2F7;
+  --text:      #0F172A;
+  --text-2:    #334155;
+  --muted:     #475569;
+  --dim:       #64748B;
+  --faint:     #94A3B8;
+  --accent:    #0E7C8B;
+  --accent-ink:#FFFFFF;
+  --scroll:    #C3CFDB;
+}
+
+body {
+  margin: 0;
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: Inter, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--scroll); border-radius: 3px; }
+
+/* Native controls follow the theme (dropdown popups, date pickers) */
+:root[data-theme="dark"]  { color-scheme: dark; }
+:root[data-theme="light"] { color-scheme: light; }
