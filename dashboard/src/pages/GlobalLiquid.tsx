@@ -11,6 +11,7 @@ import {
   MIN_YEAR, MAX_YEAR, DEFAULT_YEAR,
 } from '../components/ui'
 import { Donut, TwoLevelTreemap, FlowSankey, ForecastPanel, type YearPoint } from '../components/charts'
+import { NewsInsights } from '../components/NewsInsights'
 
 type YearTotal = {
   year: number
@@ -232,6 +233,8 @@ export default function GlobalLiquid() {
           {insights.map((line, i) => <li key={i}>{line}</li>)}
         </ul>
       </Card>
+
+      <NewsInsights scopeType="global" scopeKey="Liquid" year={y} />
 
       <SectionTitle title="Annual Volume Trend" note={`${MIN_YEAR}–${MAX_YEAR}`} />
       <Card>

@@ -9,6 +9,7 @@ import {
   MIN_YEAR, MAX_YEAR, DEFAULT_YEAR,
 } from '../components/ui'
 import { Donut, FlowSankey, ForecastPanel, type YearPoint } from '../components/charts'
+import { NewsInsights } from '../components/NewsInsights'
 
 type CoastalRow = {
   year: number
@@ -182,6 +183,8 @@ export default function CoastalRegion() {
             <KPICard label="YoY Growth" value={<YoYBadge value={yoy} />} />
             <KPICard label="CAGR" value={<CAGRBadge value={cagr} />} />
           </div>
+
+          <NewsInsights scopeType="coastal_region" scopeKey={region} year={year} />
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <Card title="Annual Volume Trend" subtitle="load vs. discharge, by year">

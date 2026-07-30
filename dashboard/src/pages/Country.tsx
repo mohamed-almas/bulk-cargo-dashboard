@@ -9,6 +9,7 @@ import {
   MIN_YEAR, MAX_YEAR, DEFAULT_YEAR,
 } from '../components/ui'
 import { ForecastPanel, type YearPoint } from '../components/charts'
+import { NewsInsights } from '../components/NewsInsights'
 
 type SummaryRow = {
   year: number
@@ -246,6 +247,8 @@ export default function Country() {
               </ul>
             )}
           </Card>
+
+          <NewsInsights scopeType="country" scopeKey={country} year={year} />
 
           {/* ---------- Annual trend ---------- */}
           <SectionTitle title="Annual Volume Trend" note="load vs discharge, all years" />

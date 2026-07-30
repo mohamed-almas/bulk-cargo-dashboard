@@ -11,6 +11,7 @@ import {
   MIN_YEAR, MAX_YEAR, DEFAULT_YEAR,
 } from '../components/ui'
 import { Donut, ForecastPanel, type YearPoint } from '../components/charts'
+import { NewsInsights } from '../components/NewsInsights'
 
 // ---------------------------------------------------------------------------
 // Row shapes for the matviews used on this page.
@@ -250,6 +251,8 @@ export default function Port() {
             <KPICard label="Liquid Share" value={selectedRow.total_volume > 0
               ? fmtPct(selectedRow.total_liquid_volume / selectedRow.total_volume) : '—'} />
           </div>
+
+          <NewsInsights scopeType="port" scopeKey={portId} year={year} />
 
           {/* ---------- Trend ---------- */}
           <SectionTitle title="Annual Volume Trend" note="load vs discharge, by year" />
