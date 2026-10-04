@@ -1,8 +1,7 @@
 name: Refresh News Insights
 
+# Schedule disabled — run manually via workflow_dispatch only.
 on:
-  schedule:
-    - cron: "0 4 * * 1"   # every Monday at 04:00 UTC (after the Sunday tradeflows refresh)
   workflow_dispatch:        # manual trigger from GitHub UI
 
 jobs:

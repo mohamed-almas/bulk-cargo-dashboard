@@ -1,0 +1,30 @@
+name: Keep Actions Alive
+
+# GitHub auto-disables scheduled workflows after 60 days with no repo
+# activity. This job makes a weekly commit so that never happens.
+on:
+  schedule:
+    - cron: "0 0 * * 0"   # every Sunday at 00:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Touch keepalive file
+        run: |
+          mkdir -p .github
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > .github/.keepalive
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .github/.keepalive
+          git diff --cached --quiet || git commit -m "chore: keepalive ping"
+          git push
