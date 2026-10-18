@@ -1,11 +1,12 @@
 name: Refresh Congestion & Port Particulars
 
 # Weekly Oceanbolt -> Supabase refresh of congestion_timeseries and port_particulars.
-# Runs after the tradeflows refresh (Sunday 03:00 UTC) so the two never compete for Oceanbolt's rate limit.
+# Runs after the tradeflows (03:00 UTC) and zones (05:00 UTC, up to 350 min) refreshes so they never
+# compete for Oceanbolt's rate limit.
 
 on:
   schedule:
-    - cron: "0 7 * * 0"   # every Sunday at 07:00 UTC
+    - cron: "0 11 * * 0"   # every Sunday at 11:00 UTC
   workflow_dispatch:        # manual trigger from GitHub UI
     inputs:
       days_back:
