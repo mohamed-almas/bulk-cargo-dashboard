@@ -39,6 +39,8 @@ def main():
             chunk[c] = chunk[c].astype("Int64")
         for c in dates:
             chunk[c] = pd.to_datetime(chunk[c]).dt.strftime("%Y-%m-%d")
+        if a.table == "congestion_timeseries":  # a blank country code is a real series: keep it as '' (key column)
+            chunk["dimension_value"] = chunk["dimension_value"].fillna("")
         rows = [{k: clean(v) for k, v in r.items()} for r in chunk.to_dict("records")]
         if sb:
             failed += sb.upsert(a.table, rows, conflict)
