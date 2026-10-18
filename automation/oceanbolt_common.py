@@ -58,7 +58,8 @@ class Supabase:
     """Minimal PostgREST client (service role): paged select and batched upsert."""
 
     def __init__(self):
-        self.base = os.environ["SUPABASE_URL"].rstrip("/")
+        # the project URL is public (it is in the dashboard build); only the key is secret
+        self.base = os.environ.get("SUPABASE_URL", "https://lsyombbeyjokpndczvdj.supabase.co").rstrip("/")
         key = os.environ["SUPABASE_SERVICE_ROLE_KEY"].strip().strip("\"'")
         self.headers = {"apikey": key, "Content-Type": "application/json"}
         if not key.startswith("sb_"):  # new-style sb_secret_ keys go in apikey only; legacy JWT keys also as Bearer
