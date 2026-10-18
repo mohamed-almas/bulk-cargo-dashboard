@@ -59,8 +59,10 @@ class Supabase:
 
     def __init__(self):
         self.base = os.environ["SUPABASE_URL"].rstrip("/")
-        key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
-        self.headers = {"apikey": key, "Authorization": "Bearer " + key, "Content-Type": "application/json"}
+        key = os.environ["SUPABASE_SERVICE_ROLE_KEY"].strip().strip("\"'")
+        self.headers = {"apikey": key, "Content-Type": "application/json"}
+        if not key.startswith("sb_"):  # new-style sb_secret_ keys go in apikey only; legacy JWT keys also as Bearer
+            self.headers["Authorization"] = "Bearer " + key
 
     def select_all(self, table, columns, page=1000):
         out, start = [], 0
@@ -96,6 +98,9 @@ class Supabase:
             if r.status_code == 400 and len(rows) > 1:  # isolate the bad row(s) instead of losing the batch
                 h = len(rows) // 2
                 return self._post(table, rows[:h], conflict, tries) + self._post(table, rows[h:], conflict, tries)
+            if r.status_code in (401, 403):  # a wrong key never works on retry
+                raise SystemExit("Supabase rejected the key (%s): %s\nUse the service_role key of project %s "
+                                 "(Project Settings > API), not the anon key." % (r.status_code, r.text[:150], self.base))
             log("  upsert failed (%s): %s" % (r.status_code, r.text[:200]))
             time.sleep(5)
         return len(rows)
