@@ -33,7 +33,8 @@ def main():
     sb = None if a.dry_run else Supabase()
     total = failed = 0
     t0 = time.time()
-    for chunk in pd.read_csv(a.csv, chunksize=CHUNK, dtype={"window": str}):
+    # keep_default_na=False: the country code NA (Namibia) must stay text, only empty cells are null
+    for chunk in pd.read_csv(a.csv, chunksize=CHUNK, dtype={"window": str}, keep_default_na=False, na_values=[""]):
         for c in ints:
             chunk[c] = chunk[c].astype("Int64")
         for c in dates:
