@@ -25,6 +25,10 @@ on:
         description: "Refresh congestion_timeseries"
         type: boolean
         default: true
+      run_congested_vessels:
+        description: "Refresh congested_vessels (start_date/end_date also apply to it)"
+        type: boolean
+        default: true
       run_port_particulars:
         description: "Refresh port_particulars"
         type: boolean
@@ -64,9 +68,39 @@ jobs:
           REFRESH_END_DATE: ${{ github.event.inputs.end_date }}
         run: python refresh_congestion_timeseries.py
 
+  congested_vessels:
+    name: Congested vessels (Oceanbolt → Supabase)
+    needs: congestion
+    # run even when congestion failed or was skipped, so one problem does not block the other table
+    if: ${{ !cancelled() && (github.event_name == 'schedule' || inputs.run_congested_vessels) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: automation/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r automation/requirements.txt
+
+      - name: Refresh congested_vessels
+        working-directory: automation
+        env:
+          OCEANBOLT_TOKEN: ${{ secrets.OCEANBOLT_TOKEN }}
+          SUPABASE_URL: https://lsyombbeyjokpndczvdj.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          REFRESH_START_DATE: ${{ github.event.inputs.start_date }}
+          REFRESH_END_DATE: ${{ github.event.inputs.end_date }}
+        run: python refresh_congested_vessels.py
+
   port_particulars:
     name: Port particulars (Oceanbolt → Supabase)
-    needs: congestion
+    needs: [congestion, congested_vessels]
     # run even when congestion failed or was skipped, so one problem does not block the other table
     if: ${{ !cancelled() && (github.event_name == 'schedule' || inputs.run_port_particulars) }}
     runs-on: ubuntu-latest

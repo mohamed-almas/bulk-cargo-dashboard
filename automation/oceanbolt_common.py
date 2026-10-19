@@ -20,7 +20,13 @@ def log(msg):
     print(time.strftime("%H:%M:%S"), msg, flush=True)
 
 
-def retry(fn, tries=RETRIES):
+def is_heavy(msg):
+    """500 / RST_STREAM = the server gave up on the query (too much data in one request), not a network drop."""
+    return msg.startswith("500") or "rst_stream" in msg
+
+
+def retry(fn, tries=RETRIES, heavy_tries=None):
+    """heavy_tries: if set, a server reset (500) is retried only that many times (the caller then asks for less)."""
     attempt = 0
     while True:
         attempt += 1
@@ -30,11 +36,13 @@ def retry(fn, tries=RETRIES):
             return out
         except Exception as e:
             msg = str(e).lower()
+            heavy = heavy_tries is not None and is_heavy(msg)
             limited = any(k in msg for k in ("429", "rate limit", "503", "500", "unavailable", "stream removed",
                                              "deadline", "connection", "resolving"))
-            if "bad request" in msg or attempt >= (RATE_TRIES if limited else tries):  # a 400 never succeeds on retry
+            limit = heavy_tries if heavy else (RATE_TRIES if limited else tries)
+            if "bad request" in msg or attempt >= limit:  # a 400 never succeeds on retry
                 raise
-            wait = min(90, 10 * attempt) if limited else min(60, 5 * 2 ** attempt)
+            wait = 10 if heavy else (min(90, 10 * attempt) if limited else min(60, 5 * 2 ** attempt))
             log("  retry %d in %ds: %s" % (attempt, wait, str(e)[:120]))
             time.sleep(wait)
 
