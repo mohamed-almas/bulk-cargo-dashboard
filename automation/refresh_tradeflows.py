@@ -176,6 +176,32 @@ class SupabaseREST:
             raise RuntimeError(f"RPC {fn} failed {r.status_code}: {r.text[:500]}")
         return r
 
+    def insert_returning(self, table: str, record: dict) -> Optional[int]:
+        r = requests.post(
+            f"{self.base}/rest/v1/{table}",
+            headers={**self.headers, "Prefer": "return=representation"},
+            json=record,
+            timeout=30,
+        )
+        if not r.ok:
+            log.warning("insert into %s failed (%s): %s", table, r.status_code, r.text[:200])
+            return None
+        rows = r.json()
+        return rows[0]["id"] if rows else None
+
+    def update_by_id(self, table: str, row_id: int, patch: dict) -> None:
+        if row_id is None:
+            return
+        r = requests.patch(
+            f"{self.base}/rest/v1/{table}",
+            params={"id": f"eq.{row_id}"},
+            headers=self.headers,
+            json=patch,
+            timeout=30,
+        )
+        if not r.ok:
+            log.warning("update %s#%s failed (%s): %s", table, row_id, r.status_code, r.text[:200])
+
 
 def resolve_date_range() -> Tuple[date, date]:
     """Explicit REFRESH_START_DATE/REFRESH_END_DATE (YYYY-MM-DD) win when both
@@ -247,6 +273,13 @@ def main():
     sb = SupabaseREST(SUPABASE_URL, SUPABASE_KEY)
     refresh_date = pd.Timestamp.now(tz="UTC").isoformat()
 
+    refresh_type = "full" if os.environ.get("REFRESH_START_DATE", "").strip() else "incremental"
+    triggered_by = "workflow_dispatch" if os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch" else "schedule"
+    log_id = sb.insert_returning(
+        "refresh_log",
+        {"table_name": TABLE, "refresh_type": refresh_type, "status": "running", "triggered_by": triggered_by},
+    )
+
     totals: Dict[str, int] = {"fetched": 0, "upserted": 0, "skipped": 0}
     had_error = False
 
@@ -303,6 +336,20 @@ def main():
             had_error = True
 
     log.info("Materialized views: %d/%d refreshed", mv_refreshed, len(view_names))
+
+    log.info("Detecting port/master mismatches ...")
+    try:
+        sb.rpc("detect_port_master_flags", timeout=60)
+    except Exception:
+        log.exception("detect_port_master_flags failed")
+        had_error = True
+
+    sb.update_by_id("refresh_log", log_id, {
+        "status": "failed" if had_error else "success",
+        "rows_affected": totals["upserted"],
+        "finished_at": pd.Timestamp.now(tz="UTC").isoformat(),
+        "error_message": None if not had_error else "see workflow run logs",
+    })
 
     if had_error:
         log.error("Finished with errors")
