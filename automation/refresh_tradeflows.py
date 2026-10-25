@@ -339,7 +339,7 @@ def main():
 
     log.info("Detecting port/master mismatches ...")
     try:
-        sb.rpc("detect_port_master_flags", timeout=60)
+        sb.rpc("detect_port_master_flags", timeout=660)  # the DB function has a 10 min statement_timeout
     except Exception:
         log.exception("detect_port_master_flags failed")
         had_error = True
