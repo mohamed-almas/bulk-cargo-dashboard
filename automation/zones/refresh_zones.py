@@ -48,17 +48,26 @@ def log(msg):
     print(time.strftime("%H:%M:%S"), msg, flush=True)
 
 
+RATE_TRIES = 8  # rate limits (429) and connection drops need more patience than other errors
+
+
 def with_retry(fn, tries=RETRIES):
-    for attempt in range(1, tries + 1):
+    attempt = 0
+    while True:
+        attempt += 1
         try:
             out = fn()
             time.sleep(REQUEST_DELAY)
             return out
         except Exception as e:
-            if attempt == tries or "bad request" in str(e).lower():  # a 400 never succeeds on retry
+            msg = str(e).lower()
+            limited = any(k in msg for k in ("429", "rate limit", "503", "unavailable", "stream removed", "deadline",
+                                             "connection", "resolving"))
+            limit = max(tries, RATE_TRIES) if limited else tries
+            if attempt >= limit or "bad request" in msg:  # a 400 never succeeds on retry
                 raise
-            wait = min(60, 5 * 2 ** attempt)
-            log("  retry %d/%d in %ds: %s" % (attempt, tries - 1, wait, str(e)[:120]))
+            wait = min(90, 10 * attempt) if limited else min(60, 5 * 2 ** attempt)
+            log("  retry %d/%d in %ds: %s" % (attempt, limit - 1, wait, str(e)[:120]))
             time.sleep(wait)
 
 
@@ -247,7 +256,7 @@ def main():
                     choices=["dims", "count", "changes", "pairs"])
     ap.add_argument("--full", action="store_true", help="ignore stored dates and download the full history")
     ap.add_argument("--overlap", type=int, default=OVERLAP_DAYS, help="days re-downloaded before the last stored date")
-    ap.add_argument("--workers", type=int, default=4)
+    ap.add_argument("--workers", type=int, default=2)  # 4 workers mostly produced 429 storms, not speed
     ap.add_argument("--zones", nargs="*", help="zone names only (default all)")
     ap.add_argument("--segments", nargs="*", help="segment or sub-segment names only (default all)")
     ap.add_argument("--dry-run", action="store_true", help="download and count, but write nothing to Supabase")
