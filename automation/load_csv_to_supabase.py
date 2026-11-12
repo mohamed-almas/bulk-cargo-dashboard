@@ -27,6 +27,7 @@ TABLES = {  # table -> (conflict columns, integer columns, date columns)
                           ["snapshot_date"]),
 }
 CHUNK = 20000
+SKIPPED_BAD = [0]  # port_particulars rows skipped because loa_* still equals dwt_* (see chunks())
 DEFAULT_PORTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "Bulk Cargo", "Port Particulars",
                              "ports.csv")
 
@@ -52,6 +53,12 @@ def chunks(a):
                 c = c.drop(columns=["current_port_id", "last_port_departed_at"], errors="ignore").merge(
                     lookup, on=["platform", "current_port_name", "current_country_code"], how="left")
                 c["last_load_port_id"] = c["last_load_port_id"].replace(0, pd.NA)
+            if a.table == "port_particulars" and not a.keep_bad:
+                # Oceanbolt's old bug: loa_* repeated dwt_* at every percentile. Such rows must never overwrite
+                # corrected rows already in Supabase, so they are skipped (and counted) instead of loaded.
+                bad = (c["number_of_port_calls"] > 0) & (c["loa_p50"] == c["dwt_p50"]) & (c["loa_p90"] == c["dwt_p90"])
+                SKIPPED_BAD[0] += int(bad.sum())
+                c = c[~bad]
             yield c
 
 
@@ -60,6 +67,8 @@ def main():
     ap.add_argument("table", choices=TABLES)
     ap.add_argument("csv", help="CSV path (congested_vessels: wildcard for the yearly files)")
     ap.add_argument("--ports", default=DEFAULT_PORTS, help="ports.csv, used to recover current_port_id")
+    ap.add_argument("--keep-bad", action="store_true",
+                    help="port_particulars: also load rows whose loa_* still equals dwt_* (normally skipped)")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
     conflict, ints, dates = TABLES[a.table]
@@ -78,6 +87,9 @@ def main():
             failed += sb.upsert(a.table, rows, conflict)
         total += len(rows)
         log("%d rows read%s, %d failed (%.0fs)" % (total, "" if a.dry_run else " and upserted", failed, time.time() - t0))
+    if SKIPPED_BAD[0]:
+        log("SKIPPED %d port_particulars rows whose loa_* still equals dwt_* (old bad data). If the local refresh has "
+            "finished this should be 0: rerun it with --full." % SKIPPED_BAD[0])
     sys.exit(1 if failed else 0)
 
 
