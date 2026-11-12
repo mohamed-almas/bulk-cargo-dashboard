@@ -34,7 +34,7 @@ on:
         type: boolean
         default: true
       full_port_particulars:
-        description: "Port particulars: ignore what is in Supabase and re-fetch every window (slow: several hours)"
+        description: "Port particulars: IGNORE Supabase and re-fetch all ~93,000 windows (about 13 hours: it cannot finish in one 6 h run and restarts from zero each time, so normally leave this off)"
         type: boolean
         default: false
 
@@ -69,12 +69,19 @@ jobs:
         run: python refresh_congestion_timeseries.py
 
   congested_vessels:
-    name: Congested vessels (Oceanbolt → Supabase)
+    name: Congested vessels ${{ matrix.platform }} (Oceanbolt → Supabase)
     needs: congestion
     # run even when congestion failed or was skipped, so one problem does not block the other table
     if: ${{ !cancelled() && (github.event_name == 'schedule' || inputs.run_congested_vessels) }}
     runs-on: ubuntu-latest
     timeout-minutes: 330
+    # one job per platform, one at a time, fastest first: each platform gets its own time limit, so a slow
+    # dry/tank day count can no longer cancel lng/lpg (this endpoint rate-limits, so never in parallel)
+    strategy:
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        platform: [lpg, lng, tank, dry]
 
     steps:
       - uses: actions/checkout@v4
@@ -96,7 +103,7 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           REFRESH_START_DATE: ${{ github.event.inputs.start_date }}
           REFRESH_END_DATE: ${{ github.event.inputs.end_date }}
-        run: python refresh_congested_vessels.py
+        run: python refresh_congested_vessels.py --platforms ${{ matrix.platform }}
 
   port_particulars:
     name: Port particulars (Oceanbolt → Supabase)

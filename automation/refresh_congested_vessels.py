@@ -1,7 +1,7 @@
 """Weekly Oceanbolt -> Supabase refresh of the congested_vessels table.
 
 One snapshot per day: daily for the last RECENT_DAYS (90) days and weekly (every 7th calendar day) before that, the
-same grid as the CSV history. Per platform the window starts OVERLAP_DAYS (14) before the newest snapshot already in
+same grid as the CSV history. Per platform the window starts OVERLAP_DAYS (3) before the newest snapshot already in
 Supabase (or at REFRESH_START_DATE / REFRESH_END_DATE when set, to backfill) and ends today. Rows are upserted on
 (platform, snapshot_date, imo).
 The API needs a location filter, so each day is fetched region by region in groups; a server reset on a group
@@ -27,7 +27,7 @@ from oceanbolt_common import Supabase, clean, is_heavy, log, retry, run_parallel
 TABLE = "congested_vessels"
 CONFLICT = "platform,snapshot_date,imo"
 PLATFORMS = ["dry", "tank", "lng", "lpg"]
-OVERLAP_DAYS = 14
+OVERLAP_DAYS = 3  # was 14: a snapshot day now costs 5-10 min, and no run has ever skipped a region-day
 RECENT_DAYS = 90
 STEP_DAYS = 7
 FLUSH_ROWS = 5000
