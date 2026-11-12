@@ -132,4 +132,4 @@ jobs:
           SUPABASE_URL: https://lsyombbeyjokpndczvdj.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           FULL_FLAG: ${{ inputs.full_port_particulars && '--full' || '' }}
-        run: python refresh_port_particulars.py $FULL_FLAG
+        run: python refresh_port_particulars.py $FULL_FLAG --max-minutes 325

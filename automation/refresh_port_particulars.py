@@ -13,6 +13,7 @@ Credentials: OCEANBOLT_TOKEN, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
 import argparse
 import os
 import sys
+import time
 from datetime import date, timedelta
 
 import pandas as pd
@@ -51,6 +52,7 @@ def main():
     ap.add_argument("--zero-stale-days", type=int, default=28, help="recheck never-called ports after this many days")
     ap.add_argument("--full", action="store_true", help="ignore what is in Supabase and fetch everything")
     ap.add_argument("--limit", type=int, help="test: stop after this many requests per step")
+    ap.add_argument("--max-minutes", type=int, help="stop fetching after this long and exit OK: the next run continues")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
     token = os.environ["OCEANBOLT_TOKEN"].strip()
@@ -70,14 +72,20 @@ def main():
 
     fetched = {}  # (platform, port_id, window) -> (fetched_at, number_of_port_calls)
     if sb and not a.full:
-        rows = sb.select_all(TABLE, ["platform", "port_id", "window", "fetched_at", "number_of_port_calls"])
-        fetched = {(r["platform"], r["port_id"], str(r["window"])): (r["fetched_at"], r["number_of_port_calls"])
+        rows = sb.select_all(TABLE, ["platform", "port_id", "window", "fetched_at", "number_of_port_calls",
+                                     "loa_p50", "loa_p90", "dwt_p50", "dwt_p90"])
+        # bad = Oceanbolt's old bug (loa_* repeated dwt_*): such a row is refetched even if its window is closed
+        fetched = {(r["platform"], r["port_id"], str(r["window"])):
+                   (r["fetched_at"], r["number_of_port_calls"],
+                    bool(r["number_of_port_calls"]) and r["loa_p50"] is not None and r["loa_p50"] == r["dwt_p50"]
+                    and r["loa_p90"] == r["dwt_p90"])
                    for r in rows}
-        log("%d windows already in Supabase" % len(fetched))
+        log("%d windows already in Supabase, %d with the old bad LOA values (will be refetched)"
+            % (len(fetched), sum(v[2] for v in fetched.values())))
 
     def stale(k, window_end):
         got = fetched.get(k)
-        if got is None:
+        if got is None or got[2]:  # missing, or a row with the old bad LOA values
             return True
         at = date.fromisoformat(got[0])
         if at > window_end + timedelta(days=OVERLAP_DAYS):  # fetched well after the window closed: final
@@ -87,7 +95,12 @@ def main():
 
     buf, total, failed_rows = [], [0], [0]
 
+    deadline = time.time() + a.max_minutes * 60 if a.max_minutes else None
+    deadline_left = [0]  # windows skipped because --max-minutes ran out
+
     def work(u):
+        if deadline and time.time() > deadline:
+            return None
         p, port_id, window, ws, we = u
         # get_raw skips the SDK's date conversion, so the dates must be text, not date objects
         r = retry(lambda: PortParticulars(clients[p]).get_raw(port_id=port_id, start_date=ws.isoformat(),
@@ -108,7 +121,10 @@ def main():
         buf.clear()
 
     def on_result(u, row):
-        fetched[(row["platform"], row["port_id"], row["window"])] = (row["fetched_at"], row["number_of_port_calls"])
+        if row is None:  # past --max-minutes: leave it for the next run
+            deadline_left[0] += 1
+            return
+        fetched[(row["platform"], row["port_id"], row["window"])] = (row["fetched_at"], row["number_of_port_calls"], False)
         buf.append(row)
         if len(buf) >= FLUSH_ROWS:
             flush()
@@ -134,6 +150,8 @@ def main():
     log("step 2, calendar years for ports with calls: %d requests" % len(year_units))
     failures += run_parallel("years", year_units, work, on_result, a.workers, flush)
 
+    if deadline_left[0]:
+        log("STOPPED at the time limit with %d windows left: run it again to continue" % deadline_left[0])
     log("rows: %d, failed requests: %d, failed rows: %d%s" % (total[0], failures, failed_rows[0],
                                                              " (dry run: nothing written)" if a.dry_run else ""))
     sys.exit(1 if failures or failed_rows[0] else 0)
