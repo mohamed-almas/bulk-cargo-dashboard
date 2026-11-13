@@ -146,11 +146,13 @@ def main():
     for p, df in ports.items():
         for pid in df["port_id"]:
             got = fetched.get((p, int(pid), "all"))
-            if got is None or not got[1]:  # never saw a call at this port: no yearly rows needed
-                continue
+            quiet = got is None or not got[1]  # never saw a call at this port: no yearly rows needed...
             for y in range(HISTORY_START.year, today.year + 1):
                 we = min(date(y, 12, 31), today)
-                if stale((p, int(pid), str(y)), we):
+                k = (p, int(pid), str(y))
+                if quiet and not (k in fetched and fetched[k][2]):  # ...unless a leftover bad row must be corrected
+                    continue
+                if stale(k, we):
                     year_units.append((p, int(pid), str(y), date(y, 1, 1), we))
     year_units = year_units[:a.limit] if a.limit else year_units
     log("step 2, calendar years for ports with calls: %d requests" % len(year_units))
