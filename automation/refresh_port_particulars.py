@@ -41,6 +41,12 @@ def flatten(r):
         st = getattr(r, s)
         for src, dst in STAT_FIELDS:
             row["%s_%s" % (s, dst)] = clean(getattr(st, src)) if present else None
+    if row["number_of_port_calls"] and row["loa_p50"] is not None and row["loa_p50"] == row["dwt_p50"] \
+            and row["loa_p90"] == row["dwt_p90"]:
+        # Oceanbolt still returns dwt as loa for a few single-vessel windows: store LOA as unknown, not wrong
+        for k in row:
+            if k.startswith("loa_"):
+                row[k] = None
     return row
 
 
